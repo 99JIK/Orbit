@@ -13,14 +13,7 @@ Orbit은 본인의 폰과 홈서버에서 돌아가는 개인 업무 비서다. 
 | [docs/companion.md](docs/companion.md) | 안드로이드 앱 명세·설치 |
 | `companion/` | 안드로이드 수집 앱 (Kotlin) |
 | `server/` | 홈서버 (Python, FastAPI) |
-| `.githooks/` | 저장소 훅 |
 
 ## 현재 상태
 
 M1 진행 중. 구현 범위는 Companion의 공유·녹음 폴더 감시·전송 큐·하트비트와 서버의 수집 API다. STT·추출·디스코드 봇은 아직 없다.
-
-## 개발 환경
-
-```sh
-git config core.hooksPath .githooks   # 클론 후 1회
-```
