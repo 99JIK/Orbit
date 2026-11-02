@@ -52,6 +52,12 @@ def resolve(
         if parsed_date.assumed:
             assumed.add("date")
 
+    # SLM이 범위의 끝("다섯 시까지")을 duration_expr에 넣는 경우를 흡수한다.
+    if time_expr and duration_expr and ko.parse_duration(duration_expr) is None:
+        ranged = ko.parse_time(f"{time_expr}부터{duration_expr}", defaults)
+        if ranged is not None and ranged.end is not None:
+            time_expr, duration_expr = f"{time_expr}부터{duration_expr}", None
+
     # SLM이 시각을 date_expr에 함께 넣는 경우("내일 오후 3시")를 흡수한다.
     parsed_time = ko.parse_time(time_expr or date_expr or "", defaults)
     if parsed_time is None and time_expr and day is None:

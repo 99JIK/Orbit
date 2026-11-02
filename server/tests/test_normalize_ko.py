@@ -162,6 +162,12 @@ def test_time_range_sets_end():
     assert (r.start, r.end, r.assumed) == (at(2026, 11, 6, 14), at(2026, 11, 6, 16), frozenset())
 
 
+def test_range_end_in_duration_expr():
+    """SLM이 범위의 끝을 duration_expr에 넣은 경우."""
+    r = resolve("다음 주 수요일", "세 시", "다섯 시까지", NOW)
+    assert (r.start, r.end) == (at(2026, 11, 11, 15), at(2026, 11, 11, 17))
+
+
 def test_date_only_is_all_day():
     r = resolve("11월 20일", None, None, NOW)
     assert (r.start, r.end, r.all_day) == (at(2026, 11, 20), at(2026, 11, 21), True)
