@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Orbit</string>
+    <string name="share_label">Orbit으로 보내기</string>
+    <string name="channel_service">수집 상태</string>
+</resources>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Orbit" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <style name="Theme.Orbit.Transparent" parent="android:Theme.Translucent.NoTitleBar" />
+</resources>
