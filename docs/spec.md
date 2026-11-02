@@ -8,7 +8,7 @@ Nov 2, 2026 · @JIK
 
 ## 1. 개요
 
-Orbit은 갤럭시 폰과 홈서버 맥(8GB)에서 돌아가는 오픈소스 개인 업무 비서다. 음성·알림·메일을 로컬에서 텍스트로 바꾸고, 일정과 할 일을 추출해 디스코드 승인을 거쳐 Google Calendar/Tasks에 등록한다.
+Orbit은 갤럭시 폰과 사용자 본인의 홈서버(맥, 리눅스, Windows PC, NAS)에서 돌아가는 오픈소스 개인 업무 비서다. 음성·알림·메일을 로컬에서 텍스트로 바꾸고, 일정과 할 일을 추출해 디스코드 승인을 거쳐 Google Calendar/Tasks에 등록한다.
 
 ### 1.1 목표
 
@@ -77,6 +77,7 @@ Companion은 폰에서 이벤트를 모아 홈서버로 보내는 Kotlin 앱이�
 | --- | --- | --- | --- |
 | 공유 인텐트 대상 | 아무 앱에서 "공유 → Orbit"로 텍스트·링크·이미지·오디오 투척 | 없음 | M1 |
 | `FileObserver` + `WorkManager` | 음성 녹음·통화 녹음 폴더 감시, 새 파일 업로드 | `MANAGE_EXTERNAL_STORAGE` | M1 |
+| 통화 기록 조회 | 통화 녹음에 상대 이름·번호·수발신 방향·통화 시간 첨부 | `READ_CALL_LOG` | M1 |
 | `NotificationListenerService` | 허용 목록 앱의 알림 수집 | 알림 접근 | M3 |
 | SMS `BroadcastReceiver` | 문자 수집 | `RECEIVE_SMS` | M4 |
 | 위치 트리거 | 지정 장소 도착·출발 이벤트 | 위치(백그라운드) | M4 |
@@ -89,6 +90,7 @@ Companion은 폰에서 이벤트를 모아 홈서버로 보내는 Kotlin 앱이�
 - 차단 정규식: 인증번호(`인증번호`, `[0-9]{4,8}` + 인증 키워드), 금융 거래 알림, 지정 키워드
 - 알림 중복: 알림 `key` + 본문 해시로 동일 알림 업데이트를 1건으로 합침
 - 녹음 파일: 확장자 화이트리스트(m4a, mp3, ogg, wav), 최소 길이 2초
+- 통화 녹음은 연락처별 제외 규칙을 두지 않는다. 개인용이고 본인이 참여한 통화만 대상이므로(9.5) 상대 정보도 지우지 않고 첨부한다
 
 ### 3.3 전송
 
@@ -106,7 +108,7 @@ Companion은 폰에서 이벤트를 모아 홈서버로 보내는 Kotlin 앱이�
 
 ## 4. 홈서버
 
-홈서버는 Apple Silicon 맥(8GB/512GB) 한 대에서 프로세스 4개로 돈다. 모델은 메모리 한계 때문에 상주시키지 않고 작업 단위로 순차 로딩한다.
+홈서버는 기기 한 대에서 프로세스 4개로 돈다. 기준 사양은 RAM 8GB, 디스크 여유 100GB이고, 기준 구성은 Apple Silicon 맥(8GB/512GB)이다. 지원 플랫폼은 4.7을 따른다. 모델은 메모리 한계 때문에 상주시키지 않고 작업 단위로 순차 로딩한다.
 
 ### 4.1 프로세스
 
@@ -117,7 +119,7 @@ Companion은 폰에서 이벤트를 모아 홈서버로 보내는 Kotlin 앱이�
 | `watchers` | Python 스케줄러 | Gmail·GitHub·RSS 등 서버 측 소스 폴링 |
 | `bot` | discord.py | 승인 UI, 브리핑, 명령, 장애 알림 |
 
-모두 `launchd` 서비스로 등록하고 `KeepAlive`로 자동 재시작한다.
+모두 OS 서비스 관리자에 등록하고, 비정상 종료 시 자동으로 다시 시작한다 (4.7).
 
 ### 4.2 API
 
@@ -138,14 +140,18 @@ Companion은 폰에서 이벤트를 모아 홈서버로 보내는 Kotlin 앱이�
 ### 4.4 디렉터리
 
 ```
-orbit/
-  data/raw/        # 원본 파일 (보존 기간 후 삭제)
-  data/orbit.db   # SQLite
+$ORBIT_HOME/            # 기본값 ~/orbit
+  data/orbit.db         # 운영 DB (기준 원천, 8장)
+  data/index.db         # 검색 인덱스 (파생물, 지워도 재생성)
+  data/raw/             # 원본 파일 (보존 기간 후 삭제)
+  vault/                # 지식 볼트, 마크다운 (기준 원천, 18장)
   config/context.yaml   # 맥락 사전
   config/sources.yaml   # 소스별 설정, 폴백 허용 여부
-  secrets/         # 토큰 (키체인 참조)
+  secrets/              # OS 비밀 저장소를 쓸 수 없는 플랫폼의 암호화 파일 (4.7)
   logs/
 ```
+
+`data/`는 로컬 디스크에 있어야 한다. 네트워크 공유(SMB·NFS)나 동기화 폴더에 두지 않아야 한다. SQLite는 네트워크 파일 시스템에서 잠금이 보장되지 않아 손상될 수 있다. 기기 간 동기화 대상은 `vault/`뿐이다.
 
 ### 4.5 코어·워커 분리 (NAS 지원)
 
@@ -180,11 +186,27 @@ orbit/
 - **공정성**: 코어별 동시 작업 수와 일일 처리량 상한을 둔다. 주인의 작업이 항상 우선하고, 주인이 `/pause`하면 공유 작업도 멈춘다
 - **설정 주체**: 어떤 소스를 공유 워커로 보낼지는 지인 본인의 코어 설정이 정한다. 워커 쪽은 별도 정책을 강제하지 않는다
 
+### 4.7 플랫폼 지원
+
+| 플랫폼 | 등급 | 서비스 관리 | 비밀 저장 | STT 가속 | 비고 |
+| --- | --- | --- | --- | --- | --- |
+| macOS (Apple Silicon) | 1 | launchd (`KeepAlive`) | 키체인 | Metal | 기준 구성 |
+| Linux (x86_64·arm64) | 1 | systemd 사용자 서비스 (`Restart=on-failure`) | Secret Service. 없으면 암호화 파일 | CUDA·Vulkan·CPU | |
+| Docker (NAS 포함) | 1 | Compose (`restart: unless-stopped`) | Docker secret 또는 암호화 파일 | CPU (GPU는 호스트 설정에 따름) | 코어 전용 권장 (4.5) |
+| Windows 10·11 | 2 | 작업 스케줄러 (부팅 시 시작, 실패 시 재시작) | 자격 증명 관리자 | CUDA·Vulkan·CPU | 네이티브 Python. WSL2·Docker도 가능 |
+
+- 등급 1: 설치 자동화(15장), CI 테스트, 설치 문서를 모두 제공한다
+- 등급 2: CI 테스트와 설치 문서를 제공한다. 설치 자동화는 등급 1 이후에 한다
+- 코드는 OS 고유 API를 직접 호출하지 않아야 한다. 데이터 경로는 `ORBIT_HOME` 기준으로 잡고, 비밀은 OS 비밀 저장소를 감싼 추상화(`keyring` 등)를 거친다
+- CI는 Ubuntu·macOS·Windows에서 서버 테스트를 돌리고, Docker 이미지를 amd64·arm64로 빌드한다
+- 서비스 등록 템플릿과 절차는 `deploy/`와 [deploy.md](deploy.md)에 둔다
+- 플랫폼별 전원·부팅 설정은 10.2를 따른다
+
 ## 5. 처리 파이프라인
 
 모든 이벤트는 같은 6단계를 거친다. SLM은 구조화 추출만 맡고, 날짜 계산과 검증은 규칙 코드가 맡는다.
 
-1. **텍스트화**: 음성은 whisper.cpp(large-v3-turbo급, Metal 가속)로 STT. 맥락 사전의 고유명사를 initial prompt로 주입한다. 알림·메일은 그대로 통과.
+1. **텍스트화**: 음성은 whisper.cpp(large-v3-turbo급, 플랫폼별 가속은 4.7)로 STT. 통화 녹음은 `payload.call`의 상대 이름을 화자 힌트로 쓴다. 맥락 사전의 고유명사를 initial prompt로 주입한다. 알림·메일은 그대로 통과.
 2. **분류**: SLM이 `schedule | task | deadline | note | ignore` 중 하나와 확신도(0\~1)를 낸다.
 3. **추출**: 유형별 JSON 스키마로 출력을 강제한다(llama.cpp GBNF 또는 Ollama structured outputs). 날짜는 계산하지 않고 원문 표현만 뽑는다.
    - 예: `{"title": "교수님 면담", "date_expr": "다음 주 화요일", "time_expr": "오후 3시", "duration_expr": null, "people": ["교수님"], "project": null}`
@@ -314,7 +336,25 @@ Google 연동은 OAuth 앱 하나로 묶고, 쓰기 스코프는 Calendar 이벤
 
 ## 8. 데이터 모델
 
-저장소는 SQLite 하나다. 이벤트는 소스와 무관한 단일 스키마로 받고, 후보와 승인 결과를 원문에 연결해 감사와 평가에 같이 쓴다.
+데이터는 성격에 따라 저장소를 나눈다. 데이터마다 기준 원천(source of truth)은 하나뿐이다. 나머지는 원천에서 다시 만들 수 있는 파생물이다. 이벤트는 소스와 무관한 단일 스키마로 받고, 후보와 승인 결과를 원문에 연결해 감사와 평가에 같이 쓴다.
+
+### 8.0 저장소 구성
+
+| 저장소 | 위치 | 기준 원천인 데이터 | 성격 |
+| --- | --- | --- | --- |
+| 운영 DB (SQLite) | `data/orbit.db` | 이벤트 메타데이터, 후보, 승인 기록, 소스 커서, 하트비트, 기기 | 원천 |
+| 원본 파일 | `data/raw/` | 녹음·첨부 원본 (보존 기간까지) | 원천 |
+| 지식 볼트 (마크다운) | `vault/` | 노트 본문, 사람이 고친 내용 (18장) | 원천 |
+| 외부 서비스 | Google Calendar/Tasks | 확정된 일정·할 일 (6장) | 원천. 운영 DB는 `google_id`로 참조만 한다 |
+| 검색 인덱스 (SQLite) | `data/index.db` | 없음 | 파생. 볼트와 운영 DB에서 `orbit reindex`로 재생성 |
+
+규칙:
+
+- 운영 DB와 검색 인덱스는 파일을 분리한다. 인덱스를 지우거나 다시 만들어도 승인 기록에 영향이 없고, 인덱스가 손상돼도 운영이 멈추지 않는다
+- 운영 DB는 WAL 모드로 연다. 여러 프로세스(4.1)가 쓰므로 쓰기 트랜잭션을 짧게 유지한다
+- 코어·워커 분리 구성(4.5)에서 워커는 DB 파일에 직접 접근하지 않는다. 작업과 결과는 코어 API로만 주고받는다
+- 볼트 노트와 운영 DB는 frontmatter의 `event_id`로 연결한다. 볼트에서 노트를 지워도 운영 DB 기록은 남는다
+- 백업 대상은 원천 전부(운영 DB, 원본 파일, 볼트, `config/`)다. 파생물은 백업하지 않는다 (10.4)
 
 ### 8.1 이벤트 스키마 (`/ingest`)
 
@@ -335,14 +375,24 @@ Google 연동은 OAuth 앱 하나로 묶고, 쓰기 스코프는 Calendar 이벤
 
 ### 8.2 테이블
 
+운영 DB(`data/orbit.db`, 원천):
+
 | 테이블 | 주요 컬럼 | 비고 |
 | --- | --- | --- |
-| `events` | event\_id, source, type, captured\_at, received\_at, text, file\_ref, dedupe\_key, status | status: queued / processed / failed |
+| `events` | event\_id, source, app, type, captured\_at, received\_at, device\_id, payload(JSON), text, file\_ref, dedupe\_key, status | status: queued / processed / failed |
+| `devices` | device\_id, token\_hash, created\_at, revoked\_at | 기기 토큰. 해시만 저장 |
 | `candidates` | cand\_id, event\_id, kind, fields(JSON), assumed(JSON), confidence, model, calendar, conflict | kind: schedule / task / deadline / note |
 | `decisions` | cand\_id, action, edited\_fields(JSON), decided\_at, google\_id | action: approve / edit / to\_task / ignore. 평가 데이터셋의 원천 |
 | `sources` | source, cursor, last\_ok\_at, fallback\_allowed, retention\_days | 증분 커서와 정책 |
 | `heartbeats` | device\_id, at, app\_version, listener\_ok, queue\_len | 장애 감지 |
-| `embeddings` (M5) | event\_id, vector | 중복 판정, `/찾기` |
+
+검색 인덱스(`data/index.db`, 파생물):
+
+| 테이블 | 주요 컬럼 | 비고 |
+| --- | --- | --- |
+| `notes` | path, content\_hash, event\_id, para, updated\_at | 볼트 파일 목록. 해시가 바뀐 파일만 다시 색인 |
+| `chunks` | chunk\_id, path, ordinal, text | 문단 단위 조각. FTS5 색인 대상 (18.4) |
+| `chunk_vectors` (M5) | chunk\_id, vector | sqlite-vec. 중복 판정, `/찾기` |
 
 ### 8.3 맥락 사전 (`config/context.yaml`)
 
@@ -377,14 +427,16 @@ defaults:
 
 - 메일·알림 본문은 추출 프롬프트에 데이터 블록으로만 넣고, 시스템 지시와 분리한다
 - SLM 출력은 스키마 필드로만 받는다. 출력에서 도구 호출이나 자유 지시를 해석하지 않는다
+- 검색으로 가져온 볼트 문단도 외부 입력과 같이 취급한다. 볼트에는 메일·메시지 원문이 들어가므로, 질의 답변 프롬프트(18.4)에도 데이터 블록으로만 넣는다
 - 등록·전송·공유 등 모든 쓰기는 `#approve` 승인 후에만 실행한다. 봇은 메일 발송·파일 공유 권한을 갖지 않는다
 
 ### 9.2 권한·비밀
 
 - Google 스코프 최소화 (7.1). 읽기 토큰과 쓰기 토큰 분리 저장
-- 토큰은 macOS 키체인에 저장하고 코드·설정 파일에 두지 않는다
+- 토큰은 OS 비밀 저장소(4.7)에 저장하고 코드·설정 파일에 두지 않는다
 - Companion 토큰은 기기별 발급, 서버에서 개별 폐기
-- 폰 분실 절차: Tailscale에서 기기 제거 → 기기 토큰 폐기 → Google 세션 점검. 절차를 `#system` 고정 메시지로 둔다
+- 폰 분실 절차: Tailscale에서 기기 제거 → 기기 토큰 폐기 → Syncthing에서 기기 제거 → Google 세션 점검. 절차를 `#system` 고정 메시지로 둔다
+- 폰에 동기화된 볼트 사본은 원격으로 지울 수 없다. 폰 볼트 동기화는 선택 사항으로 두고, 켤 때는 기기 화면 잠금과 저장소 암호화를 전제로 한다
 
 ### 9.3 데이터 경계
 
@@ -403,7 +455,15 @@ defaults:
 | 원본 음성 | STT 후 14일 |
 | 이벤트 원문 | 90일 (소스별 `retention_days`로 조정) |
 | 후보·승인 기록 | 영구 (평가 데이터셋) |
+| 볼트 노트 | 영구. 단, 아래 규칙을 따른다 |
+| 검색 인덱스 | 볼트·운영 DB를 따라간다 (원천에서 지워지면 다음 색인 때 지워짐) |
 | 로그 | 30일 |
+
+볼트는 영구 보존이고 다른 기기로 복제되므로, 보존 기간이 짧은 데이터가 볼트를 거쳐 오래 남지 않게 한다.
+
+- 9.3에서 보존을 제한한 데이터(타인 메시지, 학생 개인정보)는 볼트에 원문을 쓰지 않는다. 추출 결과와 요약만 쓴다
+- 원문 전문은 운영 DB의 보존 기간(이벤트 원문 90일)을 따른다. 사용자가 노트로 확정(승인)한 경우에만 볼트에 전문을 남긴다
+- 본인 음성 메모와 본인이 참여한 통화의 STT 결과는 이 제한의 대상이 아니다
 
 ### 9.5 법적 고려
 
@@ -421,7 +481,7 @@ defaults:
 | 대상 | 감지 | 알림 조건 |
 | --- | --- | --- |
 | Companion | 하트비트 | 60분 무신호, `listener_ok = false` |
-| 서버 프로세스 | `launchd` KeepAlive + `/health` | 재시작 3회/시간 초과 |
+| 서버 프로세스 | 서비스 관리자 재시작(4.7) + `/health` | 재시작 3회/시간 초과 |
 | 소스 커서 | `sources.last_ok_at` | 소스별 주기 × 3 경과 |
 | Google 토큰 | API 401 | 즉시 |
 | 큐 | 큐 길이 | 50건 초과 또는 1시간 이상 정체 |
@@ -429,9 +489,17 @@ defaults:
 
 ### 10.2 전원·부팅
 
-- 정전 후 자동 부팅(에너지 설정의 "정전 후 자동 시작")과 자동 로그인을 켠다
-- FileVault와 충돌: FileVault를 켜면 정전 후 재부팅 시 로그인 화면에서 멈춘다. 계획된 재시작은 `fdesetup authrestart`로 넘길 수 있으나 정전은 막을 수 없다. 결정: FileVault는 끈다. 토큰은 키체인에 두고, DB·원본 음성 등 민감 데이터는 앱 수준 암호화(SQLCipher 등)로 보호한다
-- 잠자기 방지: 디스플레이만 끄고 시스템 잠자기는 끈다
+공통 요구: 정전·재부팅 뒤 사람 손 없이 서비스가 다시 떠야 한다. 디스플레이만 끄고 시스템 잠자기는 끈다.
+
+| 플랫폼 | 설정 |
+| --- | --- |
+| macOS | 에너지 설정 "정전 후 자동 시작", 자동 로그인. FileVault는 아래 결정을 따른다 |
+| Linux | BIOS "AC 전원 복구 시 켜기". systemd 사용자 서비스는 `loginctl enable-linger`로 로그인 없이 시작 |
+| Windows | BIOS 전원 복구 설정. 작업 스케줄러 "로그온 여부와 관계없이 실행". BitLocker는 TPM 자동 잠금 해제로 무인 부팅이 된다 |
+| Docker·NAS | NAS 전원 복구 설정, 컨테이너 `restart: unless-stopped` |
+
+- FileVault와 충돌(macOS): FileVault를 켜면 정전 후 재부팅 시 로그인 화면에서 멈춘다. 계획된 재시작은 `fdesetup authrestart`로 넘길 수 있으나 정전은 막을 수 없다. 결정: FileVault는 끈다. 토큰은 키체인에 두고, DB·원본 음성 등 민감 데이터는 앱 수준 암호화(SQLCipher 등)로 보호한다
+- 일반 원칙: 무인 부팅과 디스크 암호화가 충돌하는 플랫폼에서는 디스크 암호화 대신 앱 수준 암호화를 쓴다
 
 ### 10.3 감사·롤백
 
@@ -440,7 +508,7 @@ defaults:
 
 ### 10.4 백업·업데이트
 
-- 매일 03:00 SQLite 온라인 백업, `config/` 포함. 주 1회 외장 디스크 또는 클라우드로 복사 (암호화)
+- 매일 03:00 운영 DB 온라인 백업(SQLite backup API). `config/`, 볼트, 원본 파일을 함께 백업하고 검색 인덱스는 제외한다(8.0). 주 1회 외장 디스크 또는 클라우드로 복사 (암호화)
 - 모델·의존성 버전 고정. 교체 시 회귀 테스트 통과 후 반영 (11장)
 - 안드로이드 메이저 업데이트, 디스코드·Google API 변경은 연 수회 깨진다고 가정하고 하트비트·토큰 알림으로 감지한다
 
@@ -524,6 +592,8 @@ M2 종료 시점의 2주 실사용 결과가 이후 범위를 정한다. 기준�
 | 8GB 메모리 한계 | 처리 지연, 게임·코딩과 경합 | 순차 로딩, `/pause` |
 | 외부 API·OS 정책 변경 | 기능 파손 | 버전 고정, 장애 알림, 대체 경로 유지 |
 | 기밀·개인정보 외부 유출 | 법적·관계 문제 | 소스별 폴백 금지, 기기 단 필터, 보존 기간 |
+| Syncthing 안드로이드 앱 중단 (공식 앱은 2024년 말 개발 종료, 커뮤니티 포크 사용) | 폰 볼트 동기화 중단 | 폰 동기화는 선택 사항으로 두고, 폰에서는 `#chat` 질의로 대체 |
+| 운영 DB 손상 | 승인 기록·커서 유실 | 로컬 디스크 강제(4.4), WAL, 일일 백업(10.4), 인덱스 분리(8.0) |
 
 ## 15. 오픈소스 배포와 원큐 설치
 
@@ -538,10 +608,10 @@ M2 종료 시점의 2주 실사용 결과가 이후 범위를 정한다. 기준�
 | 봇 초대 | 반자동 | 필요 권한이 포함된 초대 URL 생성, 클릭 1회 |
 | 카테고리·채널·권한·포럼 태그·고정 메시지 | 자동 | `orbit.discord.yaml` 선언 → 봇이 API로 생성 (15.2) |
 | Google OAuth 클라이언트 | 수동 | 사용자 본인 Cloud 프로젝트에 생성 후 JSON 지정 |
-| Google 계정 연결 | 반자동 | 로컬 브라우저 OAuth, 토큰은 키체인 저장 |
+| Google 계정 연결 | 반자동 | 로컬 브라우저 OAuth, 토큰은 OS 비밀 저장소에 저장 (4.7) |
 | Tailscale | 반자동 | 설치 후 로그인 1회 |
 | 모델 다운로드 | 자동 | RAM 감지 → 프리셋 선택 (8GB: STT turbo + 4B Q4) |
-| 서비스 등록 | 자동 | macOS `launchd`, Linux `systemd`, NAS·Windows는 Docker Compose |
+| 서비스 등록 | 자동 | macOS `launchd`, Linux `systemd`, Windows 작업 스케줄러, NAS는 Docker Compose (4.7) |
 | Companion 연결 | 반자동 | APK 설치·권한 허용 후 서버가 띄운 QR로 주소·기기 토큰 페어링 |
 
 Google OAuth는 사용자별 클라이언트(BYO) 방식이다. 공용 클라이언트를 배포하면 Gmail 제한 스코프 때문에 Google 검증이 필요해진다.
@@ -587,8 +657,8 @@ categories:
 - 텔레메트리 없음
 - 어댑터 구조: 메신저(디스코드 기본), 캘린더·할 일, LLM 런타임(llama.cpp·Ollama·CLI 폴백)을 인터페이스로 분리해 교체 가능하게 한다
 - 로케일 분리: 한국어 날짜·시간 표현 규칙은 `locale/ko` 모듈로 두고 다른 언어를 추가할 수 있게 한다
-- 플랫폼: macOS·Linux 우선, NAS는 Docker로 코어 지원(4.5). 본인 PC가 Windows인 사용자가 많으므로 Windows는 WSL2 또는 Docker로 지원한다
-- 저장소: `server/` · `companion/`(안드로이드) · `deploy/`(install, launchd·systemd) · `docs/`
+- 플랫폼: 4.7을 따른다. macOS·Linux·Docker(NAS)는 1등급, Windows 네이티브는 2등급으로 지원한다
+- 저장소: `server/` · `companion/`(안드로이드) · `deploy/`(launchd·systemd·Windows·Docker) · `docs/`
 - 일정: M1\~M2는 본인 세팅을 스크립트로만 남기고, 원큐 설치와 공개 저장소 정리는 M3 이후에 한다. 라이선스(MIT 또는 Apache-2.0)는 공개 전에 정한다
 
 ## 16. 사용자 유형 확장 (팩)
@@ -701,7 +771,9 @@ Orbit은 이미 수집(Capture)과 분류(Organize)를 하고 있다. 여기에 
 
 - 형식: 사람이 읽고 고칠 수 있는 마크다운 파일. Obsidian 볼트와 호환되게 YAML frontmatter(날짜, 출처, 태그, PARA 분류, 관련 이벤트 ID)를 붙인다
 - 구조: PARA 폴더(Projects · Areas · Resources · Archives). 맥락 사전의 프로젝트가 Projects 폴더와 1:1로 대응하고, 마감이 지나면 Archives로 옮길지 제안한다
-- 원본은 파일이 기준이다. SQLite 인덱스는 언제든 파일에서 다시 만들 수 있는 파생물로 둔다
+- 원본은 파일이 기준이다. SQLite 인덱스(`data/index.db`)는 언제든 파일에서 다시 만들 수 있는 파생물로 둔다 (8.0)
+- 위치: 기본값은 `$ORBIT_HOME/vault`다. Syncthing 공유 폴더는 볼트만 지정하고, `data/`는 동기화하지 않는다 (4.4)
+- 원문을 볼트에 쓰는 범위는 보존 정책(9.4)을 따른다
 - 들어오는 것: inbox·log 채널 메모, 녹음 STT 결과, 회의 요약, `#paper` 스크랩, 승인된 후보의 원문
 
 결정한 저장·동기화 스택은 아래와 같다. 화면은 Obsidian에 맡기고, Orbit은 엔진에 집중한다.
