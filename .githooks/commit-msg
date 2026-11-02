@@ -1,0 +1,34 @@
+#!/bin/sh
+#
+# commit-msg hook: AI 도구 흔적이 담긴 커밋을 거부한다.
+#
+# 검사 항목
+#   1. 커밋 메시지 본문에 금지어(Claude, Anthropic, 대소문자 무시)가 포함되어 있지 않을 것
+#   2. 작성자(author)와 커미터(committer) 식별 정보에 금지어가 포함되어 있지 않을 것
+#
+# 주석 행(#으로 시작)은 git 이 최종 메시지에서 제거하므로 검사 대상에서 제외한다.
+# 활성화: git config core.hooksPath .githooks
+
+msg_file="$1"
+pattern='claude|anthropic'
+
+fail() {
+    echo "commit-msg: $1" >&2
+    echo "commit-msg: 커밋이 거부되었습니다. 메시지 또는 git 사용자 설정을 확인하세요." >&2
+    exit 1
+}
+
+hits=$(grep -v '^#' "$msg_file" | grep -inE "$pattern")
+if [ -n "$hits" ]; then
+    fail "메시지에 금지어가 포함되어 있습니다:
+$hits"
+fi
+
+for ident in GIT_AUTHOR_IDENT GIT_COMMITTER_IDENT; do
+    value=$(git var "$ident" 2>/dev/null)
+    if echo "$value" | grep -iqE "$pattern"; then
+        fail "$ident 에 금지어가 포함되어 있습니다: $value"
+    fi
+done
+
+exit 0
