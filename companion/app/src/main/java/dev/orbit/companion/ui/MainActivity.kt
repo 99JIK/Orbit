@@ -94,7 +94,7 @@ class MainActivity : ComponentActivity() {
         var refresh by remember { mutableIntStateOf(0) }
         LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { refresh++ }
 
-        val notifyLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { refresh++ }
+        val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { refresh++ }
 
         Column(
             Modifier
@@ -139,9 +139,12 @@ class MainActivity : ComponentActivity() {
                     startActivity(appSettingsIntent(SystemSettings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION))
                 }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    PermissionRow("알림", hasNotificationPermission()) {
-                        notifyLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    PermissionRow("알림", hasPermission(Manifest.permission.POST_NOTIFICATIONS)) {
+                        permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                     }
+                }
+                PermissionRow("통화 기록 (녹음에 상대 정보 첨부)", hasPermission(Manifest.permission.READ_CALL_LOG)) {
+                    permissionLauncher.launch(Manifest.permission.READ_CALL_LOG)
                 }
                 PermissionRow("배터리 최적화 예외", isIgnoringBatteryOptimizations()) {
                     startActivity(appSettingsIntent(SystemSettings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS))
@@ -206,8 +209,8 @@ class MainActivity : ComponentActivity() {
 
     private fun appSettingsIntent(action: String) = Intent(action, Uri.parse("package:$packageName"))
 
-    private fun hasNotificationPermission() =
-        checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+    private fun hasPermission(permission: String) =
+        checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
 
     private fun isIgnoringBatteryOptimizations() =
         getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(packageName)

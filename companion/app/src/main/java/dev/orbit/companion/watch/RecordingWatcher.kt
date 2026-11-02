@@ -22,7 +22,7 @@ import java.io.File
  * [FileObserver]는 프로세스가 살아 있는 동안의 변경만 받으므로, [rescan]으로 놓친 파일을 보충한다.
  * 아직 없는 폴더(첫 통화 녹음 전)는 감시하지 못하므로, 재검사 때 감시를 다시 건다.
  */
-class RecordingWatcher(context: Context, private val scope: CoroutineScope) {
+class RecordingWatcher(private val context: Context, private val scope: CoroutineScope) {
     private val settings = Settings(context)
     private val dao = OrbitDatabase.get(context).dao()
     private val outbox = Outbox(context)
@@ -82,6 +82,7 @@ class RecordingWatcher(context: Context, private val scope: CoroutineScope) {
                 capturedAt = modifiedAt,
                 durationMs = durationMs,
                 deleteAfterSend = false,
+                call = if (origin == "call") CallLogLookup.find(context, modifiedAt) else null,
             )
         }
         dao.markSeen(SeenFile(file.absolutePath, file.length(), modifiedAt))

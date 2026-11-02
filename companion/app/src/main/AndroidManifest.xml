@@ -9,6 +9,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- 통화 녹음에 상대 이름·번호·방향 첨부 (docs/companion.md 2.2) -->
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
     <!-- 통화·음성 녹음 폴더 감시 (사이드로드 배포 전제, 스펙 3장) -->
     <uses-permission
         android:name="android.permission.MANAGE_EXTERNAL_STORAGE"

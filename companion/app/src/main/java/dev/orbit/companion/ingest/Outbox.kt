@@ -34,6 +34,7 @@ class Outbox(private val context: Context) {
      *
      * @param origin `call` | `voice` | `share`
      * @param deleteAfterSend 앱 전용 저장소에 복사한 파일이면 true
+     * @param call 통화 녹음에 대응하는 통화 기록 (`payload.call`)
      */
     suspend fun addFile(
         file: File,
@@ -44,6 +45,7 @@ class Outbox(private val context: Context) {
         durationMs: Long?,
         deleteAfterSend: Boolean,
         app: String? = null,
+        call: JSONObject? = null,
     ) {
         val isAudio = mimeType.startsWith("audio/")
         val payload = JSONObject().apply {
@@ -53,6 +55,7 @@ class Outbox(private val context: Context) {
             put("mime", mimeType)
             put("size", file.length())
             if (durationMs != null) put("duration_ms", durationMs)
+            if (call != null) put("call", call)
         }
         val event = Events.build(
             type = if (isAudio) "audio" else "share",
