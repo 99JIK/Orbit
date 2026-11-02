@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Orbit 수집 API (macOS, launchd 사용자 에이전트). 설치 절차는 docs/deploy.md 3장.
+
+    cp dev.orbit.ingest.plist ~/Library/LaunchAgents/
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.orbit.ingest.plist
+
+  __HOME__ 을 사용자 홈 디렉터리 절대 경로로 바꾼다. launchd는 ~ 와 환경 변수를 확장하지 않는다.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>dev.orbit.ingest</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>__HOME__/Orbit/server/.venv/bin/orbit-server</string>
+        <string>serve</string>
+        <string>--port</string>
+        <string>8787</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>ORBIT_HOME</key>
+        <string>__HOME__/orbit</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>__HOME__/orbit/logs/ingest.log</string>
+    <key>StandardErrorPath</key>
+    <string>__HOME__/orbit/logs/ingest.log</string>
+</dict>
+</plist>

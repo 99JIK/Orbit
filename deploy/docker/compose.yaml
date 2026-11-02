@@ -1,0 +1,16 @@
+# Orbit 코어 (Docker·NAS). 사용법은 docs/deploy.md 4장.
+#
+#   docker compose up -d
+#   docker compose run --rm ingest orbit-server device add galaxy-01
+#
+# ORBIT_BIND: 포트를 열 주소. tailnet 밖에 노출하지 않도록 호스트의 Tailscale IP를 권장한다.
+# ORBIT_DATA: 데이터 디렉터리. 로컬 디스크 경로여야 한다 (네트워크 공유 금지, spec 8장).
+services:
+  ingest:
+    build: ../../server
+    image: orbit-server:local
+    restart: unless-stopped
+    ports:
+      - "${ORBIT_BIND:-0.0.0.0}:8787:8787"
+    volumes:
+      - "${ORBIT_DATA:-./orbit-data}:/data"

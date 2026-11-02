@@ -11,8 +11,19 @@ Orbit은 본인의 폰과 홈서버에서 돌아가는 개인 업무 비서다. 
 | [docs/spec.md](docs/spec.md) | 시스템 스펙 (기준 문서) |
 | [docs/ingest-api.md](docs/ingest-api.md) | 수집 API 명세 |
 | [docs/companion.md](docs/companion.md) | 안드로이드 앱 명세·설치 |
+| [docs/deploy.md](docs/deploy.md) | 서버 배포 (Linux·macOS·Docker·Windows) |
 | `companion/` | 안드로이드 수집 앱 (Kotlin) |
 | `server/` | 홈서버 (Python, FastAPI) |
+| `deploy/` | 플랫폼별 서비스 등록 템플릿 |
+
+## 지원 플랫폼
+
+| 구성 요소 | 플랫폼 |
+| --- | --- |
+| 서버 | macOS, Linux, Docker(NAS 포함), Windows |
+| Companion | Android 11 이상 (갤럭시 One UI 기준) |
+
+CI는 Ubuntu·macOS·Windows에서 서버 테스트를 돌리고, Docker 이미지(amd64·arm64)와 Companion APK를 빌드한다.
 
 ## 현재 상태
 

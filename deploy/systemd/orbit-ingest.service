@@ -1,0 +1,21 @@
+# Orbit 수집 API (Linux, systemd 사용자 서비스). 설치 절차는 docs/deploy.md 2장.
+#
+#   cp orbit-ingest.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now orbit-ingest
+#   loginctl enable-linger "$USER"     # 로그인 없이 부팅 시 시작
+#
+# ExecStart 경로는 서버를 설치한 가상환경에 맞게 고친다.
+[Unit]
+Description=Orbit ingest API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Environment=ORBIT_HOME=%h/orbit
+ExecStart=%h/Orbit/server/.venv/bin/orbit-server serve --port 8787
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
