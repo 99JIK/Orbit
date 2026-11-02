@@ -12,6 +12,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "httpx>=0.27"]
+stt = ["faster-whisper>=1.1"]
 
 [project.scripts]
 orbit-server = "orbit_server.__main__:main"

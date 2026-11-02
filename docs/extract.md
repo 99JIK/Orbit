@@ -66,3 +66,27 @@ spec 11.1의 M2 목표(일시 정확도 85% 이상)를 합성 세트 기준으�
 - 모든 쓰기는 `#approve` 승인을 거친다. 최악의 경우 잘못된 후보 카드 1장이 생긴다
 
 추가 대응은 실사용 데이터를 보고 정한다. 후보: 지시형 문장 휴리스틱 표시, 상위 모델 재판정.
+
+## 6. 음성 경로 (STT)
+
+Ollama는 음성을 다루지 않으므로 STT는 whisper 계열 엔진을 따로 쓴다 (`server/orbit_server/stt.py`, 선택 의존성 `pip install ".[stt]"`).
+
+| 환경 | 엔진 | 모델 |
+| --- | --- | --- |
+| NVIDIA GPU | faster-whisper (CUDA) | large-v3-turbo |
+| Apple Silicon | whisper.cpp (Metal) | large-v3-turbo |
+| CPU | faster-whisper (int8) | large-v3-turbo, 느리면 small\~medium |
+
+- 모델은 작업 단위로 올렸다 내린다 (spec 4.3)
+- 언어는 한국어로 고정하고, VAD로 무음 구간을 건너뛴다
+- 맥락 사전의 고유명사와 통화 상대 이름(`payload.call.name`)을 initial prompt 힌트로 넣는다
+
+평가: `python -m orbit_server.eval_stt --audio-dir <dir> --ollama <url>`. `<dir>/manifest.jsonl`에 파일과 정답 문장을 둔다.
+
+| 날짜 | 입력 | STT | 추출 | CER | 음성→후보 | 처리 시간 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 2026-11-02 | Windows TTS(ko-KR) 합성 음성 10건, 힌트 없음 | large-v3-turbo, CPU int8 | gemma3:4b | 3.1% | 9/10 | 클립당 약 15초 (실시간의 약 3.6배) |
+
+- 유일한 실패는 "4시 반 치과"를 "4시 판치과"로 받아써 30분이 빠진 경우다
+- CER에는 "세 시"↔"3시" 같은 표기 차이도 오류로 잡힌다. 숫자 표기 정규화 후 비교는 다음 개선 항목이다
+- 합성 음성은 실제 통화보다 깨끗하다. 실제 녹음 30건으로 다시 평가한다 (spec 14.1)
