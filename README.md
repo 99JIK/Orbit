@@ -12,6 +12,7 @@ Orbit은 본인의 폰과 홈서버에서 돌아가는 개인 업무 비서다. 
 | [docs/ingest-api.md](docs/ingest-api.md) | 수집 API 명세 |
 | [docs/companion.md](docs/companion.md) | 안드로이드 앱 명세·설치 |
 | [docs/deploy.md](docs/deploy.md) | 서버 배포 (Linux·macOS·Docker·Windows) |
+| [docs/normalize-ko.md](docs/normalize-ko.md) | 한국어 날짜 정규화 규칙 |
 | `companion/` | 안드로이드 수집 앱 (Kotlin) |
 | `server/` | 홈서버 (Python, FastAPI) |
 | `deploy/` | 플랫폼별 서비스 등록 템플릿 |
