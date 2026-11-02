@@ -76,7 +76,7 @@ Companion은 폰에서 이벤트를 모아 홈서버로 보내는 Kotlin 앱이�
 | 컴포넌트 | 역할 | 권한 | 단계 |
 | --- | --- | --- | --- |
 | 공유 인텐트 대상 | 아무 앱에서 "공유 → Orbit"로 텍스트·링크·이미지·오디오 투척 | 없음 | M1 |
-| `FileObserver` + `WorkManager` | 음성 녹음·통화 녹음 폴더 감시, 새 파일 업로드 | `MANAGE_EXTERNAL_STORAGE` | M2 |
+| `FileObserver` + `WorkManager` | 음성 녹음·통화 녹음 폴더 감시, 새 파일 업로드 | `MANAGE_EXTERNAL_STORAGE` | M1 |
 | `NotificationListenerService` | 허용 목록 앱의 알림 수집 | 알림 접근 | M3 |
 | SMS `BroadcastReceiver` | 문자 수집 | `RECEIVE_SMS` | M4 |
 | 위치 트리거 | 지정 장소 도착·출발 이벤트 | 위치(백그라운드) | M4 |

@@ -1,0 +1,22 @@
+# Android / Gradle
+companion/.gradle/
+companion/build/
+companion/app/build/
+companion/local.properties
+companion/.idea/
+*.iml
+.kotlin/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+
+# 개인 설정과 데이터 (스펙 15.4)
+config/context.yaml
+config/sources.yaml
+orbit-data/
+
+.DS_Store
