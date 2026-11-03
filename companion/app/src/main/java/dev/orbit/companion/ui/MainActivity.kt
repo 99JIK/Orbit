@@ -50,6 +50,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.orbit.companion.Settings
+import dev.orbit.companion.displayPath
+import dev.orbit.companion.resolveDir
+import dev.orbit.companion.watch.RecordingFinder
 import dev.orbit.companion.data.OrbitDatabase
 import dev.orbit.companion.ingest.IngestClient
 import dev.orbit.companion.service.CompanionService
@@ -90,6 +93,10 @@ class MainActivity : ComponentActivity() {
         var connection by remember { mutableStateOf(if (settings.deviceId.isEmpty()) "미확인" else "기기 ${settings.deviceId}") }
         var collecting by remember { mutableStateOf(settings.collecting) }
         var wifiOnly by remember { mutableStateOf(settings.wifiOnlyAudio) }
+        var callDir by remember { mutableStateOf(settings.callDir) }
+        var voiceDir by remember { mutableStateOf(settings.voiceDir) }
+        var candidates by remember { mutableStateOf<List<RecordingFinder.Candidate>?>(null) }
+        var searching by remember { mutableStateOf(false) }
         // 화면 복귀 시 권한·전송 상태를 다시 읽기 위한 갱신 키
         var refresh by remember { mutableIntStateOf(0) }
         LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { refresh++ }
@@ -165,7 +172,61 @@ class MainActivity : ComponentActivity() {
                 wifiOnly = on
                 settings.wifiOnlyAudio = on
             }
-            settings.watchedDirs.forEach { Text("· ${it.dir.path}", style = MaterialTheme.typography.bodySmall) }
+
+            Section("녹음 폴더")
+            Text(
+                "내부 저장소 기준 경로입니다. 기종마다 녹음 위치가 달라서, 녹음이 안 올라가면 아래 찾기로 폴더를 고르세요. " +
+                    "자동 전송을 켠 뒤에 생긴 녹음만 보냅니다.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            DirField("통화 녹음 폴더", callDir, refresh) { callDir = it }
+            DirField("음성 녹음 폴더", voiceDir, refresh) { voiceDir = it }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = {
+                    settings.callDir = callDir
+                    settings.voiceDir = voiceDir
+                    callDir = settings.callDir
+                    voiceDir = settings.voiceDir
+                    // 감시 대상이 바뀌었으니 서비스를 다시 띄워 새 폴더에 감시를 걸고 훑게 한다
+                    if (settings.collecting) {
+                        CompanionService.stop(this@MainActivity)
+                        CompanionService.tryStart(this@MainActivity)
+                    }
+                    refresh++
+                }) { Text("폴더 저장") }
+                OutlinedButton(enabled = !searching, onClick = {
+                    if (!Environment.isExternalStorageManager()) {
+                        connection = "모든 파일 접근 권한이 먼저 필요합니다"
+                        return@OutlinedButton
+                    }
+                    searching = true
+                    scope.launch {
+                        candidates = withContext(Dispatchers.IO) { RecordingFinder.find() }
+                        searching = false
+                    }
+                }) { Text(if (searching) "찾는 중…" else "녹음 폴더 찾기") }
+            }
+            candidates?.let { found ->
+                if (found.isEmpty()) {
+                    Text("오디오 파일이 있는 폴더를 찾지 못했습니다. 녹음을 하나 만든 뒤 다시 찾아 보세요.")
+                }
+                found.forEach { c ->
+                    Column(Modifier.fillMaxWidth()) {
+                        Text(displayPath(c.dir), style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "오디오 ${c.audioCount}개 · 최근 ${formatTime(c.latestModified)}",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = { callDir = displayPath(c.dir) }) { Text("통화로") }
+                            OutlinedButton(onClick = { voiceDir = displayPath(c.dir) }) { Text("음성으로") }
+                        }
+                    }
+                }
+                if (found.isNotEmpty()) {
+                    Text("고른 뒤 \"폴더 저장\"을 눌러야 적용됩니다.", style = MaterialTheme.typography.bodySmall)
+                }
+            }
 
             Section("상태")
             refresh.let {
@@ -231,6 +292,27 @@ private fun PermissionRow(label: String, granted: Boolean, onRequest: () -> Unit
         Text(if (granted) "✓ $label" else "✗ $label", Modifier.weight(1f))
         if (!granted) OutlinedButton(onClick = onRequest) { Text("허용") }
     }
+}
+
+/** 경로 입력칸과 그 폴더의 상태(있음·오디오 수). */
+@Composable
+private fun DirField(label: String, value: String, refresh: Int, onChange: (String) -> Unit) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onChange,
+        label = { Text(label) },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+    )
+    val status = remember(value, refresh) {
+        val dir = resolveDir(value)
+        when {
+            dir == null -> "감시 안 함"
+            !Environment.isExternalStorageManager() -> "권한 필요"
+            else -> RecordingFinder.inspect(dir)?.let { "있음 · 오디오 ${it.audioCount}개" } ?: "폴더 없음"
+        }
+    }
+    Text(status, style = MaterialTheme.typography.bodySmall)
 }
 
 @Composable

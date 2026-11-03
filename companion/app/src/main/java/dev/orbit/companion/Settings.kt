@@ -49,15 +49,25 @@ class Settings(context: Context) {
         get() = prefs.getString(KEY_LAST_ERROR, "").orEmpty()
         set(value) = prefs.edit().putString(KEY_LAST_ERROR, value).apply()
 
-    /** 감시 대상 폴더. One UI 기본 녹음 앱의 저장 위치다. */
+    /**
+     * 통화 녹음 폴더. 내부 저장소 기준 상대 경로 또는 절대 경로. 비우면 감시하지 않는다.
+     * 기본값은 One UI 기본 통화 녹음 위치지만 기종·버전마다 달라서 사용자가 바꿀 수 있다.
+     */
+    var callDir: String
+        get() = prefs.getString(KEY_CALL_DIR, DEFAULT_CALL_DIR) ?: DEFAULT_CALL_DIR
+        set(value) = prefs.edit().putString(KEY_CALL_DIR, value.trim().trimEnd('/')).apply()
+
+    /** 음성 녹음 폴더. 규칙은 [callDir]와 같다. */
+    var voiceDir: String
+        get() = prefs.getString(KEY_VOICE_DIR, DEFAULT_VOICE_DIR) ?: DEFAULT_VOICE_DIR
+        set(value) = prefs.edit().putString(KEY_VOICE_DIR, value.trim().trimEnd('/')).apply()
+
+    /** 감시 대상 폴더. */
     val watchedDirs: List<WatchedDir>
-        get() {
-            val root = Environment.getExternalStorageDirectory()
-            return listOf(
-                WatchedDir(File(root, "Recordings/Call"), origin = "call"),
-                WatchedDir(File(root, "Recordings/Voice Recorder"), origin = "voice"),
-            )
-        }
+        get() = listOfNotNull(
+            resolveDir(callDir)?.let { WatchedDir(it, origin = "call") },
+            resolveDir(voiceDir)?.let { WatchedDir(it, origin = "voice") },
+        ).distinctBy { it.dir }
 
     private companion object {
         const val KEY_SERVER_URL = "server_url"
@@ -68,7 +78,24 @@ class Settings(context: Context) {
         const val KEY_WATCH_SINCE = "watch_since"
         const val KEY_LAST_SENT_AT = "last_sent_at"
         const val KEY_LAST_ERROR = "last_error"
+        const val KEY_CALL_DIR = "call_dir"
+        const val KEY_VOICE_DIR = "voice_dir"
+        const val DEFAULT_CALL_DIR = "Recordings/Call"
+        const val DEFAULT_VOICE_DIR = "Recordings/Voice Recorder"
     }
+}
+
+/** 설정값을 실제 폴더로 바꾼다. 상대 경로는 내부 저장소 루트 기준이다. */
+fun resolveDir(path: String): File? {
+    if (path.isBlank()) return null
+    val f = File(path)
+    return if (f.isAbsolute) f else File(Environment.getExternalStorageDirectory(), path)
+}
+
+/** 내부 저장소 루트 아래면 상대 경로로, 아니면 절대 경로로 보여 준다. */
+fun displayPath(dir: File): String {
+    val root = Environment.getExternalStorageDirectory().absolutePath
+    return dir.absolutePath.removePrefix("$root/").ifEmpty { dir.absolutePath }
 }
 
 /** 감시 폴더와, 그 폴더 파일의 출처 구분(`payload.origin`). */
