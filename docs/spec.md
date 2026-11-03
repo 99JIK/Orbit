@@ -890,6 +890,8 @@ folders:
 | `list_events(range, kind)` | 일정·할 일·수집 기록 조회 |
 | `propose_note(title, body)` | 새 노트 제안. 즉시 쓰지 않고 `#approve` 승인 후 `00 Inbox/`에 저장 |
 
+- 구현 상태: 방식 B의 읽기 전용 도구(`search_notes`, `read_note`, `recent_notes`, `get_person`, `list_people`, `list_events`)가 있다. `query_tracker`, `propose_note`, 조각 라벨 필터는 아직 없고, 대신 클라이언트별 범위(summary·full)로 원 녹취 노출만 나눈다 ([mcp.md](mcp.md))
+
 모델의 작업 폴더를 볼트나 연결 폴더로 지정해 직접 읽게 하는 방식은 쓰지 않아야 한다. 권한 필터를 우회하고, 인젝션된 지시가 파일 수정으로 이어질 수 있기 때문이다 (9.1).
 
 **조각 단위 권한 필터**

@@ -11,6 +11,11 @@
     orbit-server status [-n 20]
     orbit-server auth google
     orbit-server people
+    orbit-server mcp [--host 127.0.0.1] [--port 8788]
+    orbit-server mcp-client add <이름> [--scope summary|full]
+    orbit-server mcp-client list
+    orbit-server mcp-client revoke <이름>
+    orbit-server reindex
 """
 
 from __future__ import annotations
@@ -61,6 +66,17 @@ def main(argv: list[str] | None = None) -> int:
     st.add_argument("-n", type=int, default=20)
     sub.add_parser("auth", help="외부 서비스 로그인").add_argument("provider", choices=["google"])
     sub.add_parser("people", help="사람 사전 보기 (앱 관계 메모, 명함, config/context.yaml)")
+    mcp = sub.add_parser("mcp", help="외부 AI용 MCP 서버 (읽기 전용, docs/mcp.md)")
+    mcp.add_argument("--host", default="127.0.0.1")
+    mcp.add_argument("--port", type=int, default=8788)
+    mc = sub.add_parser("mcp-client", help="MCP 클라이언트 토큰 관리").add_subparsers(dest="action", required=True)
+    mc_add = mc.add_parser("add")
+    mc_add.add_argument("name")
+    mc_add.add_argument("--scope", choices=["summary", "full"], default="summary",
+                        help="summary: 원 녹취 제외(기본), full: 원 녹취 포함")
+    mc.add_parser("list")
+    mc.add_parser("revoke").add_argument("name")
+    sub.add_parser("reindex", help="검색 인덱스 다시 만들기 (data/index.db)")
 
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
@@ -105,6 +121,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "status":
         return _status(home, args.n)
+    if args.command in ("mcp", "mcp-client", "reindex"):
+        return _mcp(home, args)
     if args.command == "people":
         from .people import People
 
@@ -119,6 +137,45 @@ def main(argv: list[str] | None = None) -> int:
         print(f"토큰 저장(권한 0600): {secrets / 'google-token.json'}")
         print("config/worker.yaml 에 calendar_enabled: true 를 넣으면 실제 등록을 시작합니다")
         return 0
+    return 0
+
+
+def _vault(home: Path) -> Path:
+    from .worker import Settings
+
+    return Settings.load(home).vault_dir or home / "vault"
+
+
+def _mcp(home: Path, args) -> int:
+    from . import mcp_server
+
+    if args.command == "mcp":
+        mcp_server.serve(home, _vault(home), args.host, args.port)
+        return 0
+    if args.command == "reindex":
+        from .index import Index
+
+        (home / "data" / "index.db").unlink(missing_ok=True)
+        print(f"색인한 노트 {Index(home / 'data' / 'index.db', _vault(home)).refresh()}개")
+        return 0
+    conn = db.connect(home / "data" / "orbit.db")
+    if args.action == "add":
+        try:
+            token = mcp_server.add_client(conn, args.name, args.scope)
+        except sqlite3.IntegrityError:
+            print(f"이미 있는 이름입니다: {args.name}", file=sys.stderr)
+            return 1
+        print(f"클라이언트 {args.name} 등록 (범위 {args.scope}). 아래 토큰을 AI 도구 설정에 넣으세요 (다시 표시되지 않음):")
+        print(token)
+    elif args.action == "list":
+        for r in mcp_server.list_clients(conn):
+            state = f"폐기 {r['revoked_at']}" if r["revoked_at"] else "활성"
+            print(f"{r['name']}\t{r['scope']}\t{r['created_at']}\t{state}")
+    elif args.action == "revoke":
+        if not mcp_server.revoke_client(conn, args.name):
+            print(f"활성 클라이언트가 아닙니다: {args.name}", file=sys.stderr)
+            return 1
+        print(f"클라이언트 {args.name} 토큰 폐기")
     return 0
 
 

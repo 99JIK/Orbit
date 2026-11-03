@@ -15,6 +15,7 @@ Orbit은 본인의 폰과 홈서버에서 돌아가는 개인 업무 비서다. 
 | [docs/normalize-ko.md](docs/normalize-ko.md) | 한국어 날짜 정규화 규칙 |
 | [docs/extract.md](docs/extract.md) | 분류·추출과 평가 |
 | [docs/worker.md](docs/worker.md) | worker: STT·요약·Calendar 등록·볼트·검토 알림 |
+| [docs/mcp.md](docs/mcp.md) | MCP 서버: Claude Code 등 AI 도구에서 기록 검색 |
 | `companion/` | 안드로이드 수집 앱 (Kotlin) |
 | `server/` | 홈서버 (Python, FastAPI) |
 | `deploy/` | 플랫폼별 서비스 등록 템플릿 |
@@ -34,4 +35,5 @@ M1 진행 중. 구현 범위는 Companion의 공유·녹음 폴더 감시·전�
 
 - worker: 통화·음성 녹음 로컬 STT, 본인 AI 구독 CLI(Claude Code·Codex·Gemini)로 요약·항목 추출, 날짜 정규화, Google Calendar 바로 등록과 되돌리기, 볼트 노트, 디스코드 웹훅 검토 알림 ([docs/worker.md](docs/worker.md))
 - 사람 사전: 폰 앱의 번호별 관계 메모와 명함 사진으로 통화 상대를 알아보고 STT·요약에 반영
+- MCP 서버: Claude Code·Codex·Gemini CLI에서 노트·사람·일정을 검색하는 읽기 전용 도구 ([docs/mcp.md](docs/mcp.md))
 - 아직 없음: 디스코드 봇(버튼·명령), Google Tasks, 맥락 사전의 프로젝트·정기 일정, 검색

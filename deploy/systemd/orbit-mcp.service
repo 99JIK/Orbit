@@ -1,0 +1,19 @@
+# Orbit MCP 서버 (Linux, systemd 사용자 서비스). 설명은 docs/mcp.md.
+#
+#   cp orbit-mcp.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now orbit-mcp
+#
+# 기본은 이 PC의 AI 도구만 접속(127.0.0.1). tailnet 기기에서 쓰려면 --host 를 Tailscale 주소로 바꾼다.
+[Unit]
+Description=Orbit MCP server (읽기 전용)
+After=network-online.target
+
+[Service]
+Environment=ORBIT_HOME=%h/orbit
+ExecStart=%h/Orbit/server/.venv/bin/orbit-server mcp --host 127.0.0.1 --port 8788
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
