@@ -265,7 +265,7 @@ def test_settings_load(tmp_path):
     (tmp_path / "config" / "worker.yaml").write_text("calendar_enabled: true\nvault_dir: ~/v\n", encoding="utf-8")
     (tmp_path / "config" / "llm.yaml").write_text("providers: {}\nroles: {}\n", encoding="utf-8")
     s = Settings.load(tmp_path)
-    assert s.calendar_enabled is True and str(s.vault_dir).endswith("/v") and s.llm == {"providers": {}, "roles": {}}
+    assert s.calendar_enabled is True and s.vault_dir.name == "v" and s.llm == {"providers": {}, "roles": {}}
     (tmp_path / "config" / "worker.yaml").write_text("calender: true\n", encoding="utf-8")
     with pytest.raises(ValueError):
         Settings.load(tmp_path)
