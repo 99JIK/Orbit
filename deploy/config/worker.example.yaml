@@ -1,0 +1,25 @@
+# $ORBIT_HOME/config/worker.yaml 로 복사해 쓴다. 적지 않은 키는 기본값. 설명은 docs/worker.md 2장
+timezone: Asia/Seoul
+
+# STT (faster-whisper). VRAM 2GB 미만이면 whisper_model: medium, GPU가 없으면 whisper_device: cpu
+whisper_model: large-v3-turbo
+whisper_device: auto
+whisper_compute: auto
+unload_after_idle_s: 300
+
+# Google Calendar. `orbit-server auth google` 후 true로 바꾼다. false면 dry-run
+calendar_enabled: false
+calendar_id: primary
+min_confidence: 0.8        # 이 이상인 일정·마감만 바로 등록 (spec 5.1)
+calendar_from_share: false # 공유 자료 속 일정도 등록할지
+
+# 검토 알림: stdout | discord_webhook (URL은 secrets/discord-webhook.txt 또는 ORBIT_DISCORD_WEBHOOK_URL)
+notify: stdout
+
+# 볼트. 비우면 $ORBIT_HOME/vault
+# vault_dir: ~/orbit/vault
+include_transcript: true
+
+poll_s: 5
+max_attempts: 3
+retry_after_s: 600

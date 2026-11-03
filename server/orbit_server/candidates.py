@@ -27,7 +27,10 @@ def build_candidate(
     model: ChatModel,
     defaults: Defaults = Defaults(),
 ) -> Candidate:
-    ex = extract(text, model)
+    return candidate_from(extract(text, model), captured_at, defaults)
+
+
+def candidate_from(ex: Extraction, captured_at: datetime, defaults: Defaults = Defaults()) -> Candidate:
     when = None
     if ex.kind != "ignore":
         when = resolve(ex.date_expr, ex.time_expr, ex.duration_expr, captured_at, defaults)

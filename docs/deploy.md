@@ -2,7 +2,7 @@
 
 | 항목 | 내용 |
 | --- | --- |
-| 상태 | M1 구현 기준 (`ingest` 프로세스) |
+| 상태 | M1 구현 기준 (`ingest`, `worker` 프로세스) |
 | 템플릿 | `deploy/` |
 | 상위 문서 | [spec.md](spec.md) 4.7, 10.2 |
 
@@ -16,12 +16,12 @@
 
 | 플랫폼 | 등급 | 방식 | 템플릿 |
 | --- | --- | --- | --- |
-| Linux | 1 | systemd 사용자 서비스 | `deploy/systemd/orbit-ingest.service` |
+| Linux | 1 | systemd 사용자 서비스 | `deploy/systemd/orbit-ingest.service`, `orbit-worker.service` |
 | macOS | 1 | launchd 사용자 에이전트 | `deploy/launchd/dev.orbit.ingest.plist` |
 | Docker·NAS | 1 | Docker Compose | `deploy/docker/compose.yaml` |
 | Windows | 2 | 작업 스케줄러 | `deploy/windows/install-task.ps1` |
 
-등급의 정의는 spec 4.7을 따른다. M1에서는 `ingest`만 등록한다. `worker`·`bot`·`watchers`는 해당 마일스톤에서 같은 방식으로 추가한다.
+등급의 정의는 spec 4.7을 따른다. `worker` 템플릿은 지금 Linux에만 있다. macOS·Docker·Windows의 `worker`와 `bot`·`watchers`는 같은 방식으로 추가한다.
 
 ### 1.3 공통 요구 사항
 
@@ -40,6 +40,16 @@ python3 -m venv .venv
 .venv/bin/orbit-server device add galaxy-01
 ```
 
+worker까지 한 기기에서 돌리면 선택 의존성을 함께 설치한다. NVIDIA GPU가 있으면 `gpu`를 더한다.
+
+```sh
+.venv/bin/pip install ".[stt,worker]"          # GPU: ".[stt,worker,gpu]"
+mkdir -p ~/orbit/config && cp ../deploy/config/*.example.yaml ~/orbit/config/
+cd ~/orbit/config && mv worker.example.yaml worker.yaml && mv llm.example.yaml llm.yaml
+```
+
+설정과 CLI 로그인, Google Calendar 연결은 [worker.md](worker.md) 2~4장을 따른다.
+
 `device add`가 출력한 토큰을 Companion 앱에 입력한다 ([companion.md](companion.md) 4.2).
 
 ## 2. Linux (systemd)
@@ -55,8 +65,10 @@ python3 -m venv .venv
    loginctl enable-linger "$USER"
    ```
 
+   worker도 같은 방법으로 등록한다(`orbit-worker.service`, `systemctl --user enable --now orbit-worker`). 템플릿의 `PATH`에 `claude`·`codex`·`gemini` 위치가 들어 있어야 한다
+
 3. `enable-linger`를 해야 로그인하지 않은 상태에서도 부팅 시 서비스가 시작된다
-4. 확인: `systemctl --user status orbit-ingest`, 로그: `journalctl --user -u orbit-ingest`
+4. 확인: `systemctl --user status orbit-ingest orbit-worker`, 로그: `journalctl --user -u orbit-worker -f`
 
 ## 3. macOS (launchd)
 
