@@ -11,6 +11,10 @@ import re
 import shutil
 from datetime import datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .people import Person
 
 INBOX = "00 Inbox"
 ORIGINAL_TAG = "(원본)"
@@ -110,5 +114,37 @@ class Vault:
             body += ["\n## 전사", "> [!note]- 전사문 (로컬 STT)", *[f"> {ln}" for ln in transcript.splitlines()]]
         if extracted:
             body += ["\n> [!quote]- 추출 텍스트", *[f"> {ln}" for ln in extracted[:20000].splitlines()]]
+        path.write_text("\n".join(body) + "\n", encoding="utf-8")
+        return path
+
+    def write_person(self, p: Person) -> Path:
+        """사람 노트. 볼트 어디에든 같은 이름 노트가 있으면 건드리지 않는다(사용자가 옮기거나 고쳤을 수 있다).
+
+        없을 때만 `00 Inbox/<이름>.md`를 새로 만든다. 이후 관계·메모가 바뀌어도 노트는 고치지 않고 운영 DB만 바뀐다.
+        통화 노트의 `[[이름]]` 링크가 이 노트로 이어진다.
+        """
+        stem = safe_name(p.name)
+        for existing in self.root.rglob(f"{stem}.md"):
+            if ".obsidian" not in existing.parts:
+                return existing
+        self.inbox.mkdir(parents=True, exist_ok=True)
+        path = self.inbox / f"{stem}.md"
+        meta = {
+            "type": "person",
+            "aliases": p.aliases,
+            "relation": p.relation,
+            "org": p.org,
+            "title": p.title,
+            "phones": p.phones,
+            "emails": p.emails,
+            "tags": ["person"],
+        }
+        body = [frontmatter(meta), f"\n# {p.name}\n"]
+        info = [x for x in (p.relation, " ".join(y for y in (p.org, p.title) if y)) if x]
+        if info:
+            body.append(" · ".join(info))
+        if p.note:
+            body += ["\n## 메모", p.note]
+        body += ["\n## 기록", "이 사람이 나온 통화·자료 노트는 Obsidian 백링크로 모인다."]
         path.write_text("\n".join(body) + "\n", encoding="utf-8")
         return path

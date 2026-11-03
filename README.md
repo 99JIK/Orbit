@@ -33,4 +33,5 @@ CI는 Ubuntu·macOS·Windows에서 서버 테스트를 돌리고, Docker 이미�
 M1 진행 중. 구현 범위는 Companion의 공유·녹음 폴더 감시·전송 큐·하트비트, 서버의 수집 API와 worker다.
 
 - worker: 통화·음성 녹음 로컬 STT, 본인 AI 구독 CLI(Claude Code·Codex·Gemini)로 요약·항목 추출, 날짜 정규화, Google Calendar 바로 등록과 되돌리기, 볼트 노트, 디스코드 웹훅 검토 알림 ([docs/worker.md](docs/worker.md))
-- 아직 없음: 디스코드 봇(버튼·명령), Google Tasks, 맥락 사전, 검색
+- 사람 사전: 폰 앱의 번호별 관계 메모와 명함 사진으로 통화 상대를 알아보고 STT·요약에 반영
+- 아직 없음: 디스코드 봇(버튼·명령), Google Tasks, 맥락 사전의 프로젝트·정기 일정, 검색

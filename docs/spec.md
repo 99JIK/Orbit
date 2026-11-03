@@ -391,6 +391,7 @@ Google 연동은 OAuth 앱 하나로 묶고, 쓰기 스코프는 Calendar 이벤
 | `decisions` | cand\_id, action, edited\_fields(JSON), decided\_at, google\_id | action: approve / edit / to\_task / ignore. 평가 데이터셋의 원천 |
 | `sources` | source, cursor, last\_ok\_at, fallback\_allowed, retention\_days | 증분 커서와 정책 |
 | `heartbeats` | device\_id, at, app\_version, listener\_ok, queue\_len | 장애 감지 |
+| `people` | person\_id, name, aliases, phones, emails, org, title, relation, note, source | 사람 사전 (8.3). source: app / card |
 
 검색 인덱스(`data/index.db`, 파생물):
 
@@ -427,6 +428,9 @@ defaults:
 ```
 
 맥락 사전은 추출 프롬프트에 주입하고, 정규화 단계의 별칭 해석에도 쓴다. 디스코드 `/사전` 명령으로 항목을 추가할 수 있게 한다.
+
+- `people`은 구현돼 있다. 사람 항목에 `phones`, `org`, `title`, `note`를 더 받는다. 폰 앱의 번호별 관계 메모(`contact` 이벤트)와 명함 사진에서 뽑은 연락처는 운영 DB `people` 테이블에 쌓이고, 이 파일과 합쳐 쓴다(이 파일이 우선). 상세는 [worker.md](worker.md) 7장
+- `projects`, `recurring`, `defaults`는 아직 쓰지 않는다
 
 ## 9. 보안·프라이버시·법적 고려
 

@@ -28,8 +28,21 @@ SCHEMA: dict[str, Any] = {
         }},
         "tags": {"type": "array", "items": {"type": "string"}},
         "items": {"type": "array", "items": ITEM_SCHEMA},
+        "card": {
+            "type": "object",
+            "properties": {
+                "is_card": {"type": "boolean"},
+                "name": {"type": "string"},
+                "org": {"type": "string"},
+                "title": {"type": "string"},
+                "phones": {"type": "array", "items": {"type": "string"}},
+                "emails": {"type": "array", "items": {"type": "string"}},
+                "address": {"type": "string"},
+            },
+            "required": ["is_card", "name", "org", "title", "phones", "emails", "address"],
+        },
     },
-    "required": ["title", "summary", "key_points", "people", "tags", "items"],
+    "required": ["title", "summary", "key_points", "people", "tags", "items", "card"],
 }
 
 SYSTEM_PROMPT = """너는 사용자의 통화 녹취와 공유 자료를 정리하는 비서다. 사용자는 통화 당사자 중 한 명(나)이다.
@@ -54,11 +67,21 @@ items 규칙:
 - title: 15자 안팎 명사구, 날짜·시각 제외. people: 원문 호칭. project: 원문에 있을 때만
 - confidence: 0~1. 합의가 분명하면 높게, 애매하면 낮게
 - 자료 속 역사적 날짜, 남의 일정은 넣지 않는다
+
+card 규칙:
+- 입력이 명함(사진·스캔·텍스트)이면 is_card를 true로 하고 적힌 그대로 채운다. 없는 칸은 빈 문자열·빈 배열
+- 명함이 아니면 is_card는 false, 나머지는 빈 값
+- 명함이면 title은 "명함: 이름 (소속)", items는 비운다
 """
 
 CONTEXT_TEMPLATE = """맥락:
 - 입력 종류: {kind}
 - 캡처 시각: {captured} (Asia/Seoul){who}
+"""
+
+#: 통화 상대를 사람 사전에서 찾았을 때 붙이는 줄. 사용자가 적은 관계라 녹취보다 믿을 만하다
+KNOWN_TEMPLATE = """- 사용자가 등록한 통화 상대 정보: {desc}
+  people에는 이 정식 이름을 쓴다
 """
 
 
@@ -71,11 +94,15 @@ class Digest:
     tags: list[str] = field(default_factory=list)
     items: list[Extraction] = field(default_factory=list)
     model: str = ""
+    card: dict | None = None  # 명함일 때만 {name, org, title, phones, emails, address}
 
 
-def build_messages(text: str, kind: str, captured_at: datetime, contact: str | None = None) -> list[dict]:
+def build_messages(text: str, kind: str, captured_at: datetime, contact: str | None = None,
+                   known: str | None = None) -> list[dict]:
     who = f"\n- 통화 상대(통화 기록 기준): {contact}" if contact else ""
     ctx = CONTEXT_TEMPLATE.format(kind=kind, captured=captured_at.strftime("%Y-%m-%d %H:%M (%a)"), who=who)
+    if known:
+        ctx += KNOWN_TEMPLATE.format(desc=known)
     return [
         {"role": "system", "content": SYSTEM_PROMPT + "\n" + ctx},
         {"role": "user", "content": _data_block(text)},
@@ -108,6 +135,12 @@ def parse(raw: dict, model_name: str = "") -> Digest:
     people = [{"name": str(p.get("name")).strip(), "note": str(p.get("note") or "").strip()}
               for p in raw.get("people") or [] if isinstance(p, dict) and str(p.get("name") or "").strip()]
     tags = [t.lstrip("#").replace(" ", "-") for t in strs(raw.get("tags"))]
+    card = None
+    c = raw.get("card")
+    if isinstance(c, dict) and c.get("is_card") and str(c.get("name") or "").strip():
+        card = {"name": str(c["name"]).strip(), "org": str(c.get("org") or "").strip(),
+                "title": str(c.get("title") or "").strip(), "phones": strs(c.get("phones")),
+                "emails": strs(c.get("emails")), "address": str(c.get("address") or "").strip()}
     return Digest(
         title=str(raw.get("title") or "").strip() or "제목 없음",
         summary=str(raw.get("summary") or "").strip(),
@@ -116,13 +149,14 @@ def parse(raw: dict, model_name: str = "") -> Digest:
         tags=[t for t in tags if t],
         items=items,
         model=model_name,
+        card=card,
     )
 
 
 def to_json(d: Digest) -> str:
     return json.dumps({
         "title": d.title, "summary": d.summary, "key_points": d.key_points, "people": d.people,
-        "tags": d.tags, "model": d.model,
+        "tags": d.tags, "model": d.model, "card": {"is_card": True, **d.card} if d.card else None,
         "items": [{k: getattr(e, k) for k in ("kind", "confidence", "title", "date_expr", "time_expr",
                                              "duration_expr", "people", "project")} for e in d.items],
     }, ensure_ascii=False)

@@ -30,6 +30,28 @@ class Outbox(private val context: Context) {
     }
 
     /**
+     * 번호에 붙인 이름·관계·메모를 서버 사람 사전으로 보낸다 (`type: contact`, docs/companion.md 2.4).
+     * 같은 내용을 다시 저장해도 보내도록 dedupe_key에 저장 시각을 넣는다.
+     */
+    suspend fun addContact(number: String, name: String, relation: String, note: String) {
+        val now = System.currentTimeMillis()
+        val payload = JSONObject().apply {
+            put("number", number)
+            put("name", name)
+            put("relation", relation)
+            put("note", note)
+        }
+        val event = Events.build(
+            type = "contact",
+            capturedAt = now,
+            payload = payload,
+            dedupeKey = Events.sha256("contact|$number|$name|$relation|$note|$now"),
+            deviceId = settings.deviceId,
+        )
+        enqueue(event, file = null, mimeType = null, deleteAfterSend = false, isAudio = false)
+    }
+
+    /**
      * 파일 이벤트를 큐에 넣는다.
      *
      * @param origin `call` | `voice` | `share`

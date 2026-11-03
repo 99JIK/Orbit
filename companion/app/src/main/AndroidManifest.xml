@@ -35,6 +35,11 @@
         </activity>
 
         <activity
+            android:name=".ui.PeopleActivity"
+            android:exported="false"
+            android:label="사람" />
+
+        <activity
             android:name=".ui.ShareActivity"
             android:excludeFromRecents="true"
             android:exported="true"

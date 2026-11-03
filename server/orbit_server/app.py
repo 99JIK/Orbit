@@ -25,7 +25,7 @@ class Event(BaseModel):
     event_id: uuid.UUID
     source: Literal["phone", "gmail", "github", "rss", "desktop", "discord"]
     app: str | None = None
-    type: Literal["audio", "notification", "sms", "share", "email", "location"]
+    type: Literal["audio", "notification", "sms", "share", "email", "location", "contact"]
     captured_at: datetime
     payload: dict[str, Any]
     dedupe_key: str

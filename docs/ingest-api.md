@@ -47,7 +47,7 @@ Companion 앱 등 수집 클라이언트가 홈서버 `ingest` 프로세스로 �
 | `event_id` | UUID 문자열 | 예 | 클라이언트가 생성한다. 재전송 시 같은 값을 써야 한다 |
 | `source` | `phone` \| `gmail` \| `github` \| `rss` \| `desktop` \| `discord` | 예 | Companion은 `phone` |
 | `app` | 문자열 | 아니오 | 입력을 만든 앱의 패키지명 |
-| `type` | `audio` \| `notification` \| `sms` \| `share` \| `email` \| `location` | 예 | |
+| `type` | `audio` \| `notification` \| `sms` \| `share` \| `email` \| `location` \| `contact` | 예 | `contact`는 번호별 관계 메모 (2.1) |
 | `captured_at` | ISO 8601 | 예 | UTC 오프셋을 포함해야 한다. 날짜 정규화의 기준 시각이다 |
 | `payload` | 객체 | 예 | 2.1 참조 |
 | `dedupe_key` | 문자열 | 예 | 내용 기반 키. 텍스트는 본문의, 파일은 파일 내용의 SHA-256 hex를 권장한다 |
@@ -65,6 +65,7 @@ Companion 앱 등 수집 클라이언트가 홈서버 `ingest` 프로세스로 �
 | `size` | 파일 | 바이트 수 |
 | `duration_ms` | 오디오 | 재생 길이. 측정하지 못하면 생략한다 |
 | `call` | 통화 녹음 | 대응하는 통화 기록. 형식은 [companion.md](companion.md) 2.2. 찾지 못하면 생략한다 |
+| `number`, `name`, `relation`, `note` | `contact` | 번호와 사용자가 붙인 이름·관계·메모. 빈 문자열은 지운 것으로 본다 ([companion.md](companion.md) 2.4) |
 
 서버는 위 목록에 없는 키도 거부하지 않고 그대로 저장한다.
 

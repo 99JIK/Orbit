@@ -24,12 +24,13 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from . import content, db, digest, gcal, llm, notify
+from .people import People
 from .candidates import Candidate
 from .vault import Vault
 
 log = logging.getLogger(__name__)
 
-HANDLED_TYPES = ("audio", "share")
+HANDLED_TYPES = ("audio", "share", "contact")
 WORKER_SCHEMA = """
 CREATE TABLE IF NOT EXISTS digests (
     event_id    TEXT PRIMARY KEY,
@@ -136,6 +137,7 @@ class Worker:
             self.s.calendar_enabled, self.secrets / "google-token.json", self.s.calendar_id)
         self.notifier = notifier or self._make_notifier()
         self.fetch = fetch or content.fetch_url
+        self.people = People(self.conn, home / "config" / "context.yaml")
         self._stop = False
 
     def _migrate(self) -> None:
@@ -223,9 +225,13 @@ class Worker:
 
     def _process(self, ev: sqlite3.Row) -> Path:
         payload = json.loads(ev["payload"])
+        if ev["type"] == "contact":
+            return self._contact(payload)
         captured = datetime.fromisoformat(ev["captured_at"]).astimezone(self.tz)
         call = payload.get("call") or {}
-        contact = call.get("name") or ""
+        # 사용자가 앱에 등록한 사람이면 그 이름이 통화 기록의 캐시 이름보다 우선한다
+        person = self.people.by_phone(call.get("number"))
+        contact = person.name if person else (call.get("name") or "")
         origin = payload.get("origin") or ("call" if call else "voice")
         file_path = self.data / ev["file_ref"] if ev["file_ref"] else None
 
@@ -235,7 +241,8 @@ class Worker:
         original = None
         if ev["type"] == "audio":
             source = origin if origin in ("call", "voice") else "voice"
-            transcript = ev["text"] or self._transcribe(ev["event_id"], file_path, contact)
+            hint = person.hint_names() if person else [contact]
+            transcript = ev["text"] or self._transcribe(ev["event_id"], file_path, hint)
             text = transcript
         else:
             source = "share"
@@ -251,8 +258,18 @@ class Worker:
         if not text.strip():
             raise ValueError("텍스트 비어 있음(무음이거나 내용 없음)")
 
-        d = self._digest(ev["event_id"], text, source, captured, contact, images)
+        d = self._digest(ev["event_id"], text, source, captured, contact, images,
+                         person.describe() if person else None)
         cands = digest.candidates(d, captured)
+        people = [{"name": self.people.canonical(x["name"]), "note": x["note"]} for x in d.people]
+        card_md: list[str] = []
+        if d.card and source == "share":
+            card_person, _ = self.people.upsert(
+                name=d.card["name"], source="card", phones=d.card["phones"], emails=d.card["emails"],
+                org=d.card["org"], title=d.card["title"])
+            self.vault.write_person(card_person)
+            people = [{"name": card_person.name, "note": "명함"}]
+            card_md = _card_md(d.card)
 
         lines, items_md = [], []
         for i, c in enumerate(cands):
@@ -266,7 +283,7 @@ class Worker:
 
         note = self.vault.write(
             event_id=ev["event_id"], source=source, captured_at=captured, title=d.title, summary=d.summary,
-            key_points=d.key_points, people=d.people, tags=d.tags, items=items_md,
+            key_points=[*card_md, *d.key_points], people=people, tags=d.tags, items=items_md,
             transcript=transcript if self.s.include_transcript else None, extracted=extracted,
             original=original, source_url=source_url, contact=contact,
         )
@@ -278,14 +295,24 @@ class Worker:
             log.exception("알림 전송 실패")
         return note
 
-    def _transcribe(self, event_id: str, path: Path | None, contact: str) -> str:
+    def _contact(self, payload: dict) -> Path:
+        """앱에서 번호에 관계·메모를 붙인 이벤트. 모델을 부르지 않는다."""
+        number = str(payload.get("number") or "").strip()
+        if not number:
+            raise ValueError("contact 이벤트에 number 없음")
+        person, _ = self.people.upsert(
+            name=str(payload.get("name") or "").strip() or number, source="app", phones=[number],
+            relation=payload.get("relation"), note=payload.get("note"))
+        return self.vault.write_person(person)
+
+    def _transcribe(self, event_id: str, path: Path | None, names: list[str]) -> str:
         from .stt import FasterWhisper, build_hint
 
         if path is None or not path.exists():
             raise FileNotFoundError(f"녹음 파일 없음: {path}")
         if self._transcriber is None:
             self._transcriber = FasterWhisper(self.s.whisper_model, self.s.whisper_device, self.s.whisper_compute)
-        t = self._transcriber.transcribe(path, build_hint([contact]))
+        t = self._transcriber.transcribe(path, build_hint(names))
         self._last_stt = time.time()
         log.info("STT %ss 오디오, %ss 걸림", t.audio_s, t.latency_s)
         self.conn.execute("UPDATE events SET text = ? WHERE event_id = ?", (t.text, event_id))
@@ -298,12 +325,12 @@ class Worker:
             self._last_stt = 0.0
             log.info("STT 모델 내림 (유휴 %ss)", idle)
 
-    def _digest(self, event_id, text, source, captured, contact, images) -> digest.Digest:
+    def _digest(self, event_id, text, source, captured, contact, images, known=None) -> digest.Digest:
         row = self.conn.execute("SELECT body FROM digests WHERE event_id = ?", (event_id,)).fetchone()
         if row:
             return digest.from_json(row["body"])
         kind = {"call": "통화 녹취(STT)", "voice": "음성 메모(STT)", "share": "공유 자료"}[source]
-        raw, used = self.router.chat_json("summarize", digest.build_messages(text, kind, captured, contact),
+        raw, used = self.router.chat_json("summarize", digest.build_messages(text, kind, captured, contact, known),
                                           digest.SCHEMA, images=images or None)
         d = digest.parse(raw, used)
         self.conn.execute("INSERT INTO digests VALUES (?, ?, ?, ?)", (event_id, digest.to_json(d), used, db.now()))
@@ -372,3 +399,10 @@ class Worker:
                               (cid, db.now(), gcal.event_id(cid)))
             done.append(f"{cid[:12]} {json.loads(r['fields'])['title']}")
         return done
+
+
+def _card_md(card: dict) -> list[str]:
+    """명함 노트의 핵심 줄. key_points 자리에 넣는다."""
+    rows = [("소속", card["org"]), ("직함", card["title"]), ("전화", ", ".join(card["phones"])),
+            ("이메일", ", ".join(card["emails"])), ("주소", card["address"])]
+    return [f"{k}: {v}" for k, v in rows if v]

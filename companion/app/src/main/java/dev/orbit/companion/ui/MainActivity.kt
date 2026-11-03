@@ -228,6 +228,12 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            Section("사람")
+            OutlinedButton(onClick = {
+                startActivity(Intent(this@MainActivity, PeopleActivity::class.java))
+            }) { Text("사람·관계 메모") }
+            Text("명함은 사진을 공유 메뉴에서 Orbit으로 보내면 서버가 연락처를 정리합니다.", style = MaterialTheme.typography.bodySmall)
+
             Section("상태")
             refresh.let {
                 Text("전송 대기 ${pending}건 · 재시도 중단 ${failed}건")

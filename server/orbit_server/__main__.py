@@ -10,6 +10,7 @@
     orbit-server undo <후보 id 앞자리 | event_id>
     orbit-server status [-n 20]
     orbit-server auth google
+    orbit-server people
 """
 
 from __future__ import annotations
@@ -59,6 +60,7 @@ def main(argv: list[str] | None = None) -> int:
     st = sub.add_parser("status", help="최근 이벤트 처리 상태")
     st.add_argument("-n", type=int, default=20)
     sub.add_parser("auth", help="외부 서비스 로그인").add_argument("provider", choices=["google"])
+    sub.add_parser("people", help="사람 사전 보기 (앱 관계 메모, 명함, config/context.yaml)")
 
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
@@ -103,6 +105,12 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "status":
         return _status(home, args.n)
+    if args.command == "people":
+        from .people import People
+
+        for p in People(db.connect(home / "data" / "orbit.db"), home / "config" / "context.yaml").all():
+            print(f"{p.describe()}  [{', '.join(p.phones)}]")
+        return 0
     if args.command == "auth":
         from .gcal import authorize
 
