@@ -144,6 +144,8 @@ cd companion
 
 JDK 17 이상과 Android SDK(platform 36)가 필요하다. SDK 경로는 `local.properties`의 `sdk.dir` 또는 `ANDROID_HOME`으로 지정한다.
 
+서명: 환경 변수 `ORBIT_KEYSTORE_PATH`(PKCS12), `ORBIT_KEYSTORE_PASSWORD`, `ORBIT_KEY_ALIAS`(기본 `orbit`)가 있으면 그 키로 서명한다. CI는 저장소 비밀값 `ORBIT_KEYSTORE_B64`(키 파일 base64)와 `ORBIT_KEYSTORE_PASSWORD`로 같은 키를 쓴다. 서명이 같아야 새 APK를 지우지 않고 덮어 설치할 수 있다. 키 파일은 저장소에 넣지 않는다
+
 ### 4.2 초기 설정 절차
 
 1. 서버에서 `orbit-server device add galaxy-01`로 토큰을 발급한다

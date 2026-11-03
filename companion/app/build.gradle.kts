@@ -17,9 +17,28 @@ android {
         versionName = "0.1.0"
     }
 
+    // 고정 서명 키. 환경 변수가 있으면(CI 비밀값) 그 키로 서명해서 빌드마다 서명이 바뀌지 않게 한다.
+    // 서명이 바뀌면 폰에서 덮어 설치가 안 되고 앱을 지워야 한다. 환경 변수가 없으면 로컬 기본 디버그 키를 쓴다
+    val orbitKeystore = System.getenv("ORBIT_KEYSTORE_PATH")?.let { project.file(it) }?.takeIf { it.exists() }
+    signingConfigs {
+        if (orbitKeystore != null) {
+            create("orbit") {
+                storeFile = orbitKeystore
+                storeType = "PKCS12"
+                storePassword = System.getenv("ORBIT_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("ORBIT_KEY_ALIAS") ?: "orbit"
+                keyPassword = System.getenv("ORBIT_KEYSTORE_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            if (orbitKeystore != null) signingConfig = signingConfigs.getByName("orbit")
+        }
         release {
             isMinifyEnabled = false
+            if (orbitKeystore != null) signingConfig = signingConfigs.getByName("orbit")
         }
     }
 

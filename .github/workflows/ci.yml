@@ -51,7 +51,18 @@ jobs:
           distribution: temurin
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v4
+      # 고정 서명 키(저장소 비밀값). 없으면(포크 PR 등) 기본 디버그 키로 빌드된다
+      - name: Signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.ORBIT_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/orbit.p12"
+            echo "ORBIT_KEYSTORE_PATH=$RUNNER_TEMP/orbit.p12" >> "$GITHUB_ENV"
+          fi
       - run: ./gradlew assembleDebug --console=plain
+        env:
+          ORBIT_KEYSTORE_PASSWORD: ${{ secrets.ORBIT_KEYSTORE_PASSWORD }}
       - uses: actions/upload-artifact@v4
         with:
           name: companion-debug-apk
