@@ -1,0 +1,12 @@
+# $ORBIT_HOME/config/llm.yaml 로 복사해 쓴다. 설명은 spec 19.3, docs/worker.md 3장
+# 이 파일이 없으면 claude CLI 하나를 summarize·extract에 쓴다
+providers:
+  claude: { kind: cli, command: claude }      # snap 설치(claude-code)도 자동으로 찾는다
+  # codex:  { kind: cli, command: codex }
+  # gemini: { kind: cli, command: gemini }    # 무료 등급은 입력을 학습에 쓸 수 있다 (spec 19.5)
+  # local:  { kind: ollama, url: "http://localhost:11434", model: "gemma3:4b" }
+roles:
+  summarize: [claude]   # 통화·공유 자료 요약과 항목 추출 (worker)
+  extract: [claude]     # 메모 한 줄 추출 (eval_extract 등)
+limits:
+  claude: { daily_calls: 50 }

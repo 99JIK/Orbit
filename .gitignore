@@ -17,6 +17,13 @@ __pycache__/
 # 개인 설정과 데이터 (스펙 15.4)
 config/context.yaml
 config/sources.yaml
+config/worker.yaml
+config/llm.yaml
+secrets/
+vault/
+*.token.json
+client_secret*.json
+google-client.json
 orbit-data/
 
 .DS_Store

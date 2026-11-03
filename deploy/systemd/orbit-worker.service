@@ -1,0 +1,26 @@
+# Orbit worker (Linux, systemd 사용자 서비스). 설치 절차는 docs/deploy.md 2장, 설정은 docs/worker.md.
+#
+#   cp orbit-worker.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now orbit-worker
+#
+# CLI 구독 어댑터는 이 서비스를 실행하는 사용자 계정의 로그인을 그대로 쓴다.
+# claude·codex·gemini가 아래 PATH 밖에 있으면 경로를 추가한다.
+[Unit]
+Description=Orbit worker (STT, 요약·추출, 등록)
+After=network-online.target orbit-ingest.service
+Wants=network-online.target
+
+[Service]
+Environment=ORBIT_HOME=%h/orbit
+Environment=PATH=%h/.local/bin:%h/.npm-global/bin:/snap/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PYTHONUNBUFFERED=1
+ExecStart=%h/Orbit/server/.venv/bin/orbit-server worker
+Restart=on-failure
+RestartSec=30
+# 전사 중인 작업이 끝날 시간을 준다
+TimeoutStopSec=120
+Nice=5
+
+[Install]
+WantedBy=default.target

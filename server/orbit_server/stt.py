@@ -40,6 +40,8 @@ class FasterWhisper:
 
     def load(self) -> None:
         if self._model is None:
+            if self.device in ("auto", "cuda"):
+                _preload_cuda_libs()
             from faster_whisper import WhisperModel  # 선택 의존성: pip install orbit-server[stt]
 
             self._model = WhisperModel(self.model_name, device=self.device, compute_type=self.compute_type)
@@ -48,11 +50,13 @@ class FasterWhisper:
         self.load()
         started = _time.perf_counter()
         segments, info = self._model.transcribe(
-            str(path),
+            decode_audio(path),
             language="ko",
             initial_prompt=hint,
             vad_filter=True,
             beam_size=5,
+            # 통화는 앞 문맥을 이어 받으면 같은 문장을 반복 생성하는 환각이 잦다
+            condition_on_previous_text=False,
         )
         text = " ".join(s.text.strip() for s in segments).strip()
         return Transcript(text, info.language, round(info.duration, 1), round(_time.perf_counter() - started, 2))
@@ -60,6 +64,48 @@ class FasterWhisper:
     def unload(self) -> None:
         self._model = None
         gc.collect()
+
+
+def decode_audio(path: Path, sr: int = 16000):
+    """16kHz 모노 float32 파형.
+
+    faster-whisper 1.2.1의 내장 decode_audio는 PyAV 19에서 없어진 `metadata_errors` 인자를 넘겨 실패한다.
+    PyAV 공개 API만 써서 직접 디코딩하고 파형을 넘긴다.
+    """
+    import av
+    import numpy as np
+
+    chunks = []
+    with av.open(str(path), mode="r") as container:
+        resampler = av.AudioResampler(format="s16", layout="mono", rate=sr)
+        for frame in container.decode(audio=0):
+            chunks.extend(f.to_ndarray().reshape(-1) for f in resampler.resample(frame))
+        chunks.extend(f.to_ndarray().reshape(-1) for f in resampler.resample(None))
+    if not chunks:
+        return np.zeros(0, dtype=np.float32)
+    return np.concatenate(chunks).astype(np.float32) / 32768.0
+
+
+def _preload_cuda_libs() -> None:
+    """pip `nvidia-*-cu12` 휠의 cuBLAS·cuDNN을 절대 경로로 먼저 올린다.
+
+    CTranslate2는 soname으로 dlopen하는데, 휠은 라이브러리를 site-packages 안에 두고 LD_LIBRARY_PATH는
+    프로세스 시작 때만 읽힌다. 시스템에 CUDA가 설치돼 있으면 아무 일도 하지 않는 것과 같다.
+    """
+    import ctypes
+    import glob
+    import sys
+
+    for sp in sys.path:
+        base = Path(sp) / "nvidia"
+        if not base.is_dir():
+            continue
+        for pattern in ("cublas/lib/libcublasLt.so.*", "cublas/lib/libcublas.so.*", "cudnn/lib/libcudnn*.so.*"):
+            for so in sorted(glob.glob(str(base / pattern))):
+                try:
+                    ctypes.CDLL(so, mode=ctypes.RTLD_GLOBAL)
+                except OSError:
+                    pass
 
 
 def build_hint(names: list[str]) -> str | None:
